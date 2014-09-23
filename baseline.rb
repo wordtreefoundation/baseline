@@ -1,6 +1,7 @@
 require 'wordtriez'
 require 'wordtree'
 require 'optparse'
+require 'thread'
 require 'celluloid'
 require 'irb'
 
@@ -43,7 +44,7 @@ $lib = WordTree::Disk::Librarian.new(options[:library])
 $start = Time.now
 
 class TextWorker
-  include Celluloid
+  attr_reader :trie
 
   def initialize(source_text, options, n=4)
     @trie = Wordtriez.new
@@ -73,14 +74,38 @@ end
 case_study = $lib.find_without_ngrams(case_id)
 # $pool = TextWorker.pool(args: [case_study.content, options])
 
-$visor = Celluloid::SupervisionGroup.run!
-$visor.pool(TextWorker, as: :text_workers, args: [case_study.content, options])
+
+work_q = Queue.new
 
 ref_id = 0
-$lib.library.map do |path, id|
+$lib.library.each do |path, id|
   ref_id += 1
-  $visor[:text_workers].future.count_ngrams(id, path, ref_id)
-end.map(&:value)
+  work_q.push([id, path, ref_id])
+end
+
+threads = (0...Celluloid.cores).map do
+  Thread.new do
+    puts "Creating Worker"
+    Thread.current[:worker] = worker = TextWorker.new(case_study.content, options)
+    begin
+      while args = work_q.pop(true)
+        worker.count_ngrams(*args)    
+      end
+    rescue ThreadError
+    end
+  end
+end
+
+threads.map(&:join)
+
+$master_trie = Wordtriez.new
+threads.each do |t|
+  puts "Size: #{t[:worker].trie.size}"
+  t[:worker].trie.each do |k, v|
+    # puts k, v
+    $master_trie[k] += v
+  end
+end
 
 puts "Done."
 
