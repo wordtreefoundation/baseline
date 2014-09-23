@@ -1,0 +1,92 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    activesupport (4.1.6)
+      i18n (~> 0.6, >= 0.6.9)
+      json (~> 1.7, >= 1.7.7)
+      minitest (~> 5.1)
+      thread_safe (~> 0.1)
+      tzinfo (~> 1.1)
+    archivist-client (0.1.7)
+      faraday
+      faraday_middleware
+      representable
+      virtus (~> 1.0.0)
+    axiom-types (0.1.1)
+      descendants_tracker (~> 0.0.4)
+      ice_nine (~> 0.11.0)
+      thread_safe (~> 0.3, >= 0.3.1)
+    celluloid (0.16.0)
+      timers (~> 4.0.0)
+    coercible (1.0.0)
+      descendants_tracker (~> 0.0.1)
+    descendants_tracker (0.0.4)
+      thread_safe (~> 0.3, >= 0.3.1)
+    diff-lcs (1.2.5)
+    equalizer (0.0.9)
+    faraday (0.9.0)
+      multipart-post (>= 1.2, < 3)
+    faraday_middleware (0.9.1)
+      faraday (>= 0.7.4, < 0.10)
+    hitimes (1.2.2)
+    i18n (0.6.11)
+    ice_nine (0.11.0)
+    json (1.8.1)
+    mini_portile (0.6.0)
+    minitest (5.4.1)
+    multi_json (1.10.1)
+    multipart-post (2.0.0)
+    nokogiri (1.6.3.1)
+      mini_portile (= 0.6.0)
+    preamble (0.0.3)
+      rspec
+    representable (2.1.0)
+      multi_json
+      nokogiri
+      uber (~> 0.0.7)
+    rethinkdb (1.14.0.1)
+      json
+    retriable (1.4.1)
+    rspec (3.1.0)
+      rspec-core (~> 3.1.0)
+      rspec-expectations (~> 3.1.0)
+      rspec-mocks (~> 3.1.0)
+    rspec-core (3.1.4)
+      rspec-support (~> 3.1.0)
+    rspec-expectations (3.1.1)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.1.0)
+    rspec-mocks (3.1.1)
+      rspec-support (~> 3.1.0)
+    rspec-support (3.1.0)
+    simhash (0.2.5)
+      activesupport
+      unicode (>= 0.3.1)
+    thread_safe (0.3.4)
+    timers (4.0.1)
+      hitimes
+    tzinfo (1.2.2)
+      thread_safe (~> 0.1)
+    uber (0.0.8)
+    unicode (0.4.4.1)
+    virtus (1.0.3)
+      axiom-types (~> 0.1)
+      coercible (~> 1.0)
+      descendants_tracker (~> 0.0, >= 0.0.3)
+      equalizer (~> 0.0, >= 0.0.9)
+    wordtree (0.3.1)
+      archivist-client (>= 0.1.7)
+      preamble (>= 0.0.3)
+      rethinkdb (~> 1.14.0)
+      retriable
+      simhash (= 0.2.5)
+      virtus
+    wordtriez (0.0.3)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  celluloid
+  wordtree
+  wordtriez
