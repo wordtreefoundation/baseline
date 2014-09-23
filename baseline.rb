@@ -4,6 +4,7 @@ require 'optparse'
 require 'thread'
 require 'irb'
 require 'json'
+require 'fileutils'
 
 class TextWorker
   attr_reader :trie
@@ -74,12 +75,17 @@ OptionParser.new do |opts|
     options[:n] = Integer(n)
   end
 
-  opts.on(nil, "--restrict-id BOOK_ID", "Restrict baseline to ngrams found in BOOK_ID from library") do |book_id|
+  opts.on("", "--restrict-id BOOK_ID", "Restrict baseline to ngrams found in BOOK_ID from library") do |book_id|
     options[:restrict_book_id] = book_id
   end
 
-  opts.on(nil, "--[no-]refs", "Include references to books (uses a lot of memory)") do |bool|
+  opts.on("", "--[no-]refs", "Include references to books (uses a lot of memory)") do |bool|
     options[:refs] = bool
+  end
+
+  opts.on("", "--chdir DIR", "Change working dir to DIR before processing") do |path|
+    puts "chdir set to #{path.inspect}"
+    options[:chdir] = path
   end
 end.parse!
 
@@ -120,6 +126,11 @@ content_q = Queue.new
 ref_id = 0
 
 start = Time.now
+
+if options[:chdir]
+  puts "Using #{options[:chdir]} as working dir"
+  FileUtils.chdir(options[:chdir])
+end
 
 io_thread = Thread.new do
   if options[:library] == "-"
