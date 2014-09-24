@@ -52,20 +52,26 @@ IO.popen("bzip2 -d -c #{options[:baseline]}") do |io|
   end
 end
 
-if options[:chdir]
-  $stderr.puts "Using #{options[:chdir]} as working dir"
-  FileUtils.chdir(options[:chdir])
+get_book_paths = -> do
+  if options[:files] == "-"
+    $stderr.puts "Waiting for book list from STDIN..."
+    files_file = $stdin
+  else
+    files_file = File.open(options[:files], "r")
+  end
+  files_file.each_line.map do |line|
+    $stderr.print line
+    line.strip
+  end
 end
 
-$stderr.puts "Waiting for book list from STDIN..."
-if options[:files] == "-"
-  files_file = $stdin
+book_paths = if options[:chdir]
+  $stderr.puts "Using #{options[:chdir]} as working dir"
+  FileUtils.chdir(options[:chdir]) do
+    get_book_paths.call
+  end
 else
-  files_file = File.open(options[:files], "r")
-end
-book_paths = files_file.each_line.map do |line|
-  $stderr.print line
-  line.strip
+  get_book_paths.call
 end
 
 book_count = book_paths.size
