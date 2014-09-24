@@ -99,6 +99,8 @@ book_paths.each do |path_x|
   words_x = text_x.count(' ')
   trie_x.add_text!(text_x, 4)
   book_paths.each do |path_y|
+    next if path_x == path_y
+    
     trie_y = Wordtriez.new
     begin
       text_y = chdir_read(options[:chdir], path_y)
