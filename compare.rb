@@ -65,13 +65,14 @@ get_book_paths = -> do
   end
 end
 
-book_paths = if options[:chdir]
+book_paths = nil
+if options[:chdir]
   $stderr.puts "Using #{options[:chdir]} as working dir"
   FileUtils.chdir(options[:chdir]) do
-    get_book_paths.call
+    book_paths = get_book_paths.call
   end
 else
-  get_book_paths.call
+  book_paths = get_book_paths.call
 end
 
 book_count = book_paths.size
