@@ -2,6 +2,16 @@ require 'wordtriez'
 require 'optparse'
 require 'byebug'
 
+def chdir_read(dir, file)
+  if dir.nil?
+    return IO.read(file)
+  else
+    FileUtils.cd(dir) do
+      return IO.read(file)
+    end
+  end
+end
+
 options = {
   :files => "-",
   :output => "results.txt",
@@ -81,7 +91,7 @@ $stderr.puts "Starting comparison (#{book_count} books)..."
 book_paths.each do |path_x|
   trie_x = Wordtriez.new
   begin
-    text_x = IO.read(path_x)
+    text_x = chdir_read(options[:chdir], path_x)
   rescue => e
     $stderr.puts "error: #{e}"
     next
@@ -91,7 +101,7 @@ book_paths.each do |path_x|
   book_paths.each do |path_y|
     trie_y = Wordtriez.new
     begin
-      text_y = IO.read(path_y)
+      text_y = chdir_read(options[:chdir], path_y)
     rescue => e
       $stderr.puts "error: #{e}"
       next
