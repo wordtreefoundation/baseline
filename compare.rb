@@ -72,7 +72,7 @@ book_paths.each do |path_x|
     next
   end
   words_x = text_x.count(' ')
-  trie_x.add_text!(text_x)
+  trie_x.add_text!(text_x, 4)
   book_paths.each do |path_y|
     trie_y = Wordtriez.new
     begin
@@ -87,7 +87,7 @@ book_paths.each do |path_x|
     print File.basename(path_y)
 
     words_y = text_y.count(' ')
-    trie_y.add_text!(text_y)
+    trie_y.add_text!(text_y, 4)
 
     sum = 0
     trie_y.each do |ngram, n_y|
