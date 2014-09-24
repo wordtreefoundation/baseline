@@ -22,6 +22,10 @@ OptionParser.new do |opts|
     options[:baseline] = path
   end
 
+  opts.on("", "--limit-baseline UPPER", "Upper limit of keys to load from baseline (used for testing)") do |value|
+    options[:limit_baseline] = Integer(value)
+  end
+
   opts.on("-n", "--ngrams N", "Generate x-grams from 1 to N") do |n|
     options[:n] = Integer(n)
   end
@@ -40,10 +44,8 @@ IO.popen("bzip2 -d -c #{options[:baseline]}") do |io|
       key, value = line.rpartition(" ")
       baseline[key] = value.to_i
       count += 1
-      if (count % 1_000_000) == 0
-        puts count
-        break if count > 2_000_000
-      end
+      puts count if (count % 1_000_000) == 0
+      break if options[:limit_baseline] and count > options[:limit_baseline]
     end
   rescue EOFError
   end
@@ -93,7 +95,11 @@ book_paths.each do |path_x|
     trie_y.each do |ngram, n_y|
       n_x = trie_x[ngram]
       r = baseline[ngram]
+      r = book_count if r == 0
       sum += Math.sqrt(n_x * n_y) / (r.to_f / book_count)
+      if options[:verbose]
+        $stderr.puts "#{ngram} n_y: #{n_y}, n_x: #{n_x}, r: #{r}, sum: #{sum}"
+      end
     end
 
     score = sum / Math.sqrt(words_x ** 2 + words_y ** 2 )
