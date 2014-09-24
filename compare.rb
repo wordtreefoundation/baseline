@@ -3,7 +3,7 @@ require 'optparse'
 require 'byebug'
 
 options = {
-  :library => "library",
+  :files => "-",
   :output => "results.txt",
   :n => 4
 }
@@ -15,8 +15,8 @@ OptionParser.new do |opts|
     options[:verbose] = v
   end
 
-  opts.on("-l", "--library LIBRARY", "Set library path to LIBRARY. Use '-' to take file paths from STDIN.") do |path|
-    options[:library] = path
+  opts.on("-f", "--files FILELIST", "Read files from FILELIST. Use '-' to take file paths from STDIN.") do |path|
+    options[:files] = path
   end
 
   opts.on("-b", "--baseline BASELINE", "Read baseline from BASELINE (bz2 file)") do |path|
@@ -58,7 +58,12 @@ if options[:chdir]
 end
 
 $stderr.puts "Waiting for book list from STDIN..."
-book_paths = $stdin.each_line.map do |line|
+if options[:files] == "-"
+  files_file = $stdin
+else
+  files_file = File.open(options[:files], "r")
+end
+book_paths = files_file.each_line.map do |line|
   $stderr.print line
   line.strip
 end
