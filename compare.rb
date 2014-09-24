@@ -1,5 +1,6 @@
 require 'wordtriez'
 require 'optparse'
+require 'byebug'
 
 options = {
   :library => "library",

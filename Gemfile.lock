@@ -17,8 +17,14 @@ GEM
       ice_nine (~> 0.11.0)
       thread_safe (~> 0.3, >= 0.3.1)
     bson (2.3.0)
+    byebug (3.4.0)
+      columnize (~> 0.8)
+      debugger-linecache (~> 1.2)
+      slop (~> 3.6)
     coercible (1.0.0)
       descendants_tracker (~> 0.0.1)
+    columnize (0.8.9)
+    debugger-linecache (1.2.0)
     descendants_tracker (0.0.4)
       thread_safe (~> 0.3, >= 0.3.1)
     diff-lcs (1.2.5)
@@ -60,6 +66,7 @@ GEM
     simhash (0.2.5)
       activesupport
       unicode (>= 0.3.1)
+    slop (3.6.0)
     thread_safe (0.3.4)
     tzinfo (1.2.2)
       thread_safe (~> 0.1)
@@ -84,5 +91,6 @@ PLATFORMS
 
 DEPENDENCIES
   bson
+  byebug
   wordtree
   wordtriez
