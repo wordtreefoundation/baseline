@@ -44,7 +44,7 @@ end
 options = {
   :library => "library",
   :refs => false,
-  :format => "txt",
+  :output => "baseline.txt",
   :n => 4
 }
 
@@ -84,12 +84,13 @@ OptionParser.new do |opts|
   end
 
   opts.on("", "--chdir DIR", "Change working dir to DIR before processing") do |path|
-    puts "chdir set to #{path.inspect}"
     options[:chdir] = path
   end
 end.parse!
 
-options[:output] ||= "baseline.#{options[:format]}"
+if options[:output]
+  options[:format] ||= File.extname(options[:output]).sub(/^\.+/, '')
+end
 
 if options[:library] == "-"
   # use stdin
