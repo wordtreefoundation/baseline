@@ -32,19 +32,20 @@ class TrieCache
     end
   end
 
-  def load_bookmeta_with_trie(key)
+  def load_bookmeta_trie_text(key)
     trie = Wordtriez.new
 
     book_data = chdir_load(@maybe_chdir, key)
     book_id = WordTree::Disk::LibraryLocator.id_from_path(key)
-    book = WordTree::Book.create(book_id, book_data.metadata, book_data.content)
+    book = WordTree::Book.create(book_id, book_data.metadata, book_data.content.scrub)
+    bookmeta = book_metadata(book)
 
-    trie.add_text!(book.content.downcase, @ngrams)
+    trie.add_text!(book.content, @ngrams)
 
-    return [book_metadata(book), trie]
+    return [bookmeta, trie, book.content]
   end
 
-  def get(key)
+  def get_with_text(key)
     if @use_cache
       if @trie_cache.has_key?(key)
         # Cool! We've already loaded it, save us some time
@@ -53,23 +54,27 @@ class TrieCache
         bookmeta = @bookmeta_cache.fetch(key)
       else
         # Load this time
-        bookmeta, trie = load_bookmeta_with_trie(key)
+        bookmeta, trie, text = load_bookmeta_trie_text(key)
         # Save it for later as well
         @bookmeta_cache[key] = bookmeta
         @trie_cache[key] = trie
       end
     else
       # Not allowed to use cache (memory is scarce?)
-        bookmeta, trie = load_bookmeta_with_trie(key)
+        bookmeta, trie, text = load_bookmeta_trie_text(key)
     end
 
+    [bookmeta, trie, text]
+  end
+
+  def get(key)
+    bookmeta, trie, text = get_with_text(key)
     [bookmeta, trie]
   end
 end
 
 options = {
   :files => "-",
-  :output => "results.txt",
   :ngrams => 4,
   :use_cache => true
 }
@@ -107,20 +112,7 @@ OptionParser.new do |opts|
 end.parse!
 
 baseline = Wordtriez.new
-
-count = 0
-IO.popen("bzip2 -d -c #{options[:baseline]}") do |io|
-  begin
-    while line = io.readline
-      key, value = line.rpartition(" ")
-      baseline[key] = value.to_i
-      count += 1
-      puts count if (count % 1_000_000) == 0
-      break if options[:limit_baseline] and count > options[:limit_baseline]
-    end
-  rescue EOFError
-  end
-end
+cache = TrieCache.new(options[:ngrams], options[:use_cache], options[:chdir])
 
 get_book_paths = -> do
   if options[:files] == "-"
@@ -137,7 +129,28 @@ end
 
 book_paths = get_book_paths.call
 book_count = book_paths.size
-cache = TrieCache.new(options[:ngrams], options[:use_cache], options[:chdir])
+
+count = 0
+if options[:baseline]
+  IO.popen("bzip2 -d -c #{options[:baseline]}") do |io|
+    begin
+      while line = io.readline
+        key, value = line.rpartition(" ")
+        baseline[key] = value.to_i
+        count += 1
+        puts count if (count % 1_000_000) == 0
+        break if options[:limit_baseline] and count > options[:limit_baseline]
+      end
+    rescue EOFError
+    end
+  end
+else
+  book_paths.each do |path|
+    $stderr.puts "Loading #{path}..."
+    meta, trie, text = cache.get_with_text(path)
+    baseline.add_text!(text, 4)
+  end
+end
 
 $stderr.puts "Starting comparison (#{book_count} books) #{options[:use_cache] ? "in memory" : ""}..."
 
@@ -161,7 +174,9 @@ book_paths.each do |path_x|
     end
 
     sum = 0
+    # puts path_y
     trie_y.each do |ngram, n_y|
+      # puts "ngram: #{ngram} #{n_y}"
       n_x = trie_x[ngram]
       r = baseline[ngram]
       if r == 0

@@ -84,7 +84,7 @@ GEM
       retriable
       simhash (= 0.2.5)
       virtus
-    wordtriez (0.0.3)
+    wordtriez (0.1.2)
 
 PLATFORMS
   ruby
@@ -93,4 +93,4 @@ DEPENDENCIES
   bson
   byebug
   wordtree
-  wordtriez
+  wordtriez (= 0.1.2)
