@@ -34,8 +34,11 @@ files.each_with_index do |path, i|
 
   text = File.open(path, "r:UTF-8", &:read)
   common_count = 0
-  text.each_char.each_cons(3) do |trigram|
-    common_count += 1 if common_trigrams.include?(trigram.join)
+  ss = StringScanner.new(text)
+  while !ss.eos?
+    trigram = ss.peek(3)
+    common_count += 1 if common_trigrams.include?(trigram)
+    ss.pos += 1
   end
   total_count = text.size - 2
 
