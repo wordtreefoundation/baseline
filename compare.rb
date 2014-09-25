@@ -4,22 +4,68 @@ require 'byebug'
 
 def chdir_read(dir, file)
   if dir.nil?
-    return IO.read(file)
+    return File.open(file,'r:UTF-8',&:read).scrub
   else
     FileUtils.cd(dir) do
-      return IO.read(file)
+      return File.open(file,'r:UTF-8',&:read).scrub
     end
+  end
+end
+
+class TrieCache
+  def initialize(ngrams=4, use_cache=true, chdir=nil)
+    @ngrams = ngrams
+    @use_cache = use_cache
+    @maybe_chdir = chdir
+
+    @trie_cache = {}
+    @wordcount_cache = {}
+  end
+
+  def load_trie_and_wordcount(key)
+    trie = Wordtriez.new
+    text = chdir_read(@maybe_chdir, key)
+
+    # could improve the accuracy of wordcount if we counted *after*
+    # add_text! but because Wordtriez adds null char, ruby doesn't like that
+    wordcount = text.count(' ')
+    trie.add_text!(text, @ngrams)
+
+    return [trie, wordcount]
+  end
+
+  def get(key)
+    if @use_cache
+      if @trie_cache.has_key?(key)
+        # Cool! We've already loaded it, save us some time
+        # $stderr.puts "Using cache for #{key}"
+        trie = @trie_cache.fetch(key)
+        wordcount = @wordcount_cache.fetch(key)
+      else
+        # Load this time
+        trie, wordcount = load_trie_and_wordcount(key)
+        # Save it for later as well
+        @trie_cache[key] = trie
+        @wordcount_cache[key] = wordcount
+      end
+    else
+      # Not allowed to use cache (memory is scarce?)
+      trie, wordcount = load_trie_and_wordcount(key)
+    end
+
+    [trie, wordcount]
   end
 end
 
 options = {
   :files => "-",
   :output => "results.txt",
-  :n => 4
+  :ngrams => 4,
+  :use_cache => true
 }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: baseline.rb [options]"
+  opts.banner = "Usage: compare.rb [options]"
 
   opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
     options[:verbose] = v
@@ -38,11 +84,15 @@ OptionParser.new do |opts|
   end
 
   opts.on("-n", "--ngrams N", "Generate x-grams from 1 to N") do |n|
-    options[:n] = Integer(n)
+    options[:ngrams] = Integer(n)
   end
 
   opts.on("", "--chdir DIR", "Change working dir to DIR before processing") do |path|
     options[:chdir] = path
+  end
+
+  opts.on("", "--[no-]cache", "Do comparison in memory (faster, but all files must fit in memory)") do |bool|
+    options[:use_cache] = bool
   end
 end.parse!
 
@@ -75,35 +125,25 @@ get_book_paths = -> do
   end
 end
 
-book_paths = nil
-if options[:chdir]
-  $stderr.puts "Using #{options[:chdir]} as working dir"
-  FileUtils.chdir(options[:chdir]) do
-    book_paths = get_book_paths.call
-  end
-else
-  book_paths = get_book_paths.call
-end
-
+book_paths = get_book_paths.call
 book_count = book_paths.size
+cache = TrieCache.new(options[:ngrams], options[:use_cache], options[:chdir])
 
-$stderr.puts "Starting comparison (#{book_count} books)..."
+$stderr.puts "Starting comparison (#{book_count} books) #{options[:use_cache] ? "in memory" : ""}..."
+
 book_paths.each do |path_x|
-  trie_x = Wordtriez.new
   begin
-    text_x = chdir_read(options[:chdir], path_x)
+    trie_x, words_x = cache.get(path_x)
   rescue => e
     $stderr.puts "error: #{e}"
     next
   end
-  words_x = text_x.count(' ')
-  trie_x.add_text!(text_x, 4)
+
   book_paths.each do |path_y|
     next if path_x == path_y
-    
-    trie_y = Wordtriez.new
+
     begin
-      text_y = chdir_read(options[:chdir], path_y)
+      trie_y, words_y = cache.get(path_y)
     rescue => e
       $stderr.puts "error: #{e}"
       next
@@ -113,17 +153,20 @@ book_paths.each do |path_x|
     print " "
     print File.basename(path_y)
 
-    words_y = text_y.count(' ')
-    trie_y.add_text!(text_y, 4)
-
     sum = 0
     trie_y.each do |ngram, n_y|
       n_x = trie_x[ngram]
       r = baseline[ngram]
-      r = book_count if r == 0
+      if r == 0
+        # if we don't have any record of the ngram, make it insignificant
+        if options[:verbose]
+          $stderr.puts "'#{ngram}' not found in baseline, assuming insignificance"
+        end
+        r = book_count * 1_000_000
+      end
       sum += Math.sqrt(n_x * n_y) / (r.to_f / book_count)
       if options[:verbose]
-        $stderr.puts "#{ngram} n_y: #{n_y}, n_x: #{n_x}, r: #{r}, sum: #{sum}"
+        $stderr.puts "'#{ngram}' n_y: #{n_y}, n_x: #{n_x}, r: #{r}, sum: #{sum}"
       end
     end
 
