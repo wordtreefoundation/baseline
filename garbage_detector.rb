@@ -43,4 +43,5 @@ files.each_with_index do |path, i|
   total_count = text.size - 2
 
   puts "#{i+1}\t#{time}\t#{common_count}\t#{total_count}\t#{common_count.to_f / total_count}\t#{path}"
+  $stdout.flush
 end

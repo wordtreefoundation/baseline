@@ -40,10 +40,6 @@ def make_word_index(lookup, path, tracker = 0, &block)
   [wordcount, tracker]
 end
 
-def save_text_as_indexed_binary(text, index, path)
-
-end
-
 files = File.read(options[:files]).split("\n")
 files = files.map{ |f| File.join(options[:chdir], f) } if options[:chdir]
 
