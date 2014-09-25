@@ -27,15 +27,21 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-def make_word_index(lookup, path, tracker = 0)
+def make_word_index(lookup, path, tracker = 0, &block)
   text = File.open(path, "r:UTF-8", &:read)
   $t.text_clean(text)
   wordcount = 0
-  text.scrub.scan(/\w+/) do |word|
+  scrubbed_text = text.scrub
+  scrubbed_text.scan(/\w+/) do |word|
     wordcount += 1
-    lookup[word] ||= (tracker += 1)
+    i = (lookup[word] ||= (tracker += 1))
+    yield i, wordcount
   end
   [wordcount, tracker]
+end
+
+def save_text_as_indexed_binary(text, index, path)
+
 end
 
 files = File.read(options[:files]).split("\n")
@@ -44,9 +50,18 @@ files = files.map{ |f| File.join(options[:chdir], f) } if options[:chdir]
 lookup = {}
 tracker = 0
 total_words = 0
-files.each do |path|
-  puts path
-  wordcount, tracker = make_word_index(lookup, path, tracker)
+files.each_with_index do |path, i|
+  puts "#{i+1}. #{Time.now.strftime("%H:%M:%S.%L")} - #{path}"
+  bin_path = path.sub(/\.md$/, ".bin")
+  bin_arr = []
+  wordcount, tracker = make_word_index(lookup, path, tracker) do |i, w|
+    bin_arr << i
+  end
+  puts "#{i+1}. Writing binary file #{bin_path}"
+  File.open(bin_path, "wb") do |file|
+    file.write bin_arr.pack('N*')
+  end
+
   total_words += wordcount
 end
 
