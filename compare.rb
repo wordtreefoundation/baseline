@@ -1,16 +1,7 @@
 require 'wordtriez'
+require 'wordtree'
 require 'optparse'
 require 'byebug'
-
-def chdir_read(dir, file)
-  if dir.nil?
-    return File.open(file,'r:UTF-8',&:read).scrub
-  else
-    FileUtils.cd(dir) do
-      return File.open(file,'r:UTF-8',&:read).scrub
-    end
-  end
-end
 
 class TrieCache
   def initialize(ngrams=4, use_cache=true, chdir=nil)
@@ -19,19 +10,38 @@ class TrieCache
     @maybe_chdir = chdir
 
     @trie_cache = {}
-    @wordcount_cache = {}
+    @bookmeta_cache = {}
   end
 
-  def load_trie_and_wordcount(key)
+  def book_metadata(book)
+    {
+      id: book.id,
+      year: book.year,
+      bytes: book.size_bytes,
+      words: book.content.count(' ')
+    }
+  end
+
+  def chdir_load(dir, file)
+    if dir.nil?
+      return Preamble.load(file, :external_encoding => "utf-8")
+    else
+      FileUtils.cd(dir) do
+        return Preamble.load(file, :external_encoding => "utf-8")
+      end
+    end
+  end
+
+  def load_bookmeta_with_trie(key)
     trie = Wordtriez.new
-    text = chdir_read(@maybe_chdir, key)
 
-    # could improve the accuracy of wordcount if we counted *after*
-    # add_text! but because Wordtriez adds null char, ruby doesn't like that
-    wordcount = text.count(' ')
-    trie.add_text!(text, @ngrams)
+    book_data = chdir_load(@maybe_chdir, key)
+    book_id = WordTree::Disk::LibraryLocator.id_from_path(key)
+    book = WordTree::Book.create(book_id, book_data.metadata, book_data.content)
 
-    return [trie, wordcount]
+    trie.add_text!(book.content.downcase, @ngrams)
+
+    return [book_metadata(book), trie]
   end
 
   def get(key)
@@ -40,20 +50,20 @@ class TrieCache
         # Cool! We've already loaded it, save us some time
         # $stderr.puts "Using cache for #{key}"
         trie = @trie_cache.fetch(key)
-        wordcount = @wordcount_cache.fetch(key)
+        bookmeta = @bookmeta_cache.fetch(key)
       else
         # Load this time
-        trie, wordcount = load_trie_and_wordcount(key)
+        bookmeta, trie = load_bookmeta_with_trie(key)
         # Save it for later as well
+        @bookmeta_cache[key] = bookmeta
         @trie_cache[key] = trie
-        @wordcount_cache[key] = wordcount
       end
     else
       # Not allowed to use cache (memory is scarce?)
-      trie, wordcount = load_trie_and_wordcount(key)
+        bookmeta, trie = load_bookmeta_with_trie(key)
     end
 
-    [trie, wordcount]
+    [bookmeta, trie]
   end
 end
 
@@ -133,7 +143,7 @@ $stderr.puts "Starting comparison (#{book_count} books) #{options[:use_cache] ? 
 
 book_paths.each do |path_x|
   begin
-    trie_x, words_x = cache.get(path_x)
+    mx, trie_x = cache.get(path_x)
   rescue => e
     $stderr.puts "error: #{e}"
     next
@@ -143,15 +153,11 @@ book_paths.each do |path_x|
     next if path_x == path_y
 
     begin
-      trie_y, words_y = cache.get(path_y)
+      my, trie_y = cache.get(path_y)
     rescue => e
       $stderr.puts "error: #{e}"
       next
     end
-
-    print File.basename(path_x)
-    print " "
-    print File.basename(path_y)
 
     sum = 0
     trie_y.each do |ngram, n_y|
@@ -170,7 +176,12 @@ book_paths.each do |path_x|
       end
     end
 
-    score = sum / Math.sqrt(words_x ** 2 + words_y ** 2 )
-    puts " #{score}"
+    score = sum / Math.sqrt(mx[:words] ** 2 + my[:words] ** 2 )
+
+    puts [
+      mx[:id], mx[:year], mx[:bytes], mx[:words],
+      my[:id], my[:year], my[:bytes], my[:words],
+      sum, score
+    ].join("\t")
   end
 end
