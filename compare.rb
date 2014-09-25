@@ -141,6 +141,7 @@ cache = TrieCache.new(options[:ngrams], options[:use_cache], options[:chdir])
 
 $stderr.puts "Starting comparison (#{book_count} books) #{options[:use_cache] ? "in memory" : ""}..."
 
+count = 1
 book_paths.each do |path_x|
   begin
     mx, trie_x = cache.get(path_x)
@@ -178,10 +179,12 @@ book_paths.each do |path_x|
 
     score = sum / Math.sqrt(mx[:words] ** 2 + my[:words] ** 2 )
 
-    puts [
+    puts [count, Time.now,
       mx[:id], mx[:year], mx[:bytes], mx[:words],
       my[:id], my[:year], my[:bytes], my[:words],
       sum, score
     ].join("\t")
+
+    count += 1
   end
 end
