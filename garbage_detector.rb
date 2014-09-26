@@ -1,6 +1,7 @@
 require 'optparse'
 require 'fileutils'
 require 'wordtriez'
+require 'wordtree'
 require 'benchmark'
 require 'json'
 
@@ -26,20 +27,12 @@ end.parse!
 files = File.read(options[:files]).split("\n")
 files = files.map{ |f| File.join(options[:chdir], f) } if options[:chdir]
 
-common_trigrams = %w(all and edt ent ere for has hat her his ing ion ith men nce nde oft sth ter tha the thi tio tis ver was wit you)
-
 files.each_with_index do |path, i|
   time = Time.now.strftime("%H:%M:%S.%L")
-  # puts "#{i+1}. #{time} - #{path}"
 
-  text = File.open(path, "r:UTF-8", &:read)
-  common_count = 0
-  ss = StringScanner.new(text)
-  while !ss.eos?
-    trigram = ss.peek(3)
-    common_count += 1 if common_trigrams.include?(trigram)
-    ss.pos += 1
-  end
+  text = File.open(path, "r:UTF-8", &:read).scrub
+  WordTree::Text.clean(text)
+  common_count = WordTree::Text.common_trigrams(text)
   total_count = text.size - 2
 
   puts "#{i+1}\t#{time}\t#{common_count}\t#{total_count}\t#{common_count.to_f / total_count}\t#{path}"
