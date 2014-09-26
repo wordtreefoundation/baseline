@@ -31,10 +31,15 @@ files.each_with_index do |path, i|
   time = Time.now.strftime("%H:%M:%S.%L")
 
   text = File.open(path, "r:UTF-8", &:read).scrub
-  WordTree::Text.clean(text)
-  common_count = WordTree::Text.common_trigrams(text)
   total_count = text.size - 2
+  begin
+    WordTree::Text.clean(text)
+  rescue ArgumentError
+    puts "#{i+1}\t#{time}\t\t#{total_count}\t\t#{path}\t(error)"
+    next
+  end
+  common_count = WordTree::Text.common_trigrams(text)
 
-  puts "#{i+1}\t#{time}\t#{common_count}\t#{total_count}\t#{common_count.to_f / total_count}\t#{path}"
+  puts "#{i+1}\t#{time}\t#{common_count}\t#{total_count}\t#{common_count.to_f / total_count}\t#{path}\t"
   $stdout.flush
 end
