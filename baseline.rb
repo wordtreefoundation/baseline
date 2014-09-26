@@ -15,6 +15,7 @@ class TextWorker
     # Restrict keys of subsequent books if we have a source_text
     @restrict_keys = !source_text.nil?
     @add_refs = add_refs
+    @n = n
   end
 
   def load_text(path)
@@ -27,9 +28,9 @@ class TextWorker
     puts "#{ref_id}: loaded from disk (#{text.size}b)"
     begin
       if @restrict_keys
-        @trie.union_text!(text, 4, @add_refs ? '-' + id : '')
+        @trie.union_text!(text, @n, @add_refs ? '-' + id : '')
       else
-        @trie.add_text!(text, 4, @add_refs ? '-' + id : '')
+        @trie.add_text!(text, @n, @add_refs ? '-' + id : '')
       end
     rescue StandardError => e
       puts "#{ref_id}: **ERROR** while adding text: #{text[0..100]}... #{e}"
@@ -120,7 +121,7 @@ elsif options[:restrict_book_id]
   case_study = $lib.find_without_ngrams(options[:restrict_book_id])
 end
 
-worker = TextWorker.new(case_study ? case_study.content : nil, options[:refs])
+worker = TextWorker.new(case_study ? case_study.content : nil, options[:refs], options[:n])
 
 content_q = Queue.new
 
