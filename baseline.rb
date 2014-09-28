@@ -1,4 +1,5 @@
 require 'wordtree'
+require 'wordtriez'
 require 'optparse'
 require 'thread'
 require 'irb'
@@ -6,44 +7,58 @@ require 'json'
 require 'fileutils'
 
 class TextWorker
-  attr_reader :hash
+  attr_reader :trie, :book_ids
 
-  def initialize(source_text=nil, add_refs=false, n=4)
-    @hash = {}
-    # Restrict keys of subsequent books if we have a source_text
-    @restrict_keys = !source_text.nil?
+  def initialize(maybe_chdir=nil, source_text=nil, add_refs=false, n=4)
+    @trie = Wordtriez.new
     @add_refs = add_refs
     @n = n
+    @maybe_chdir = maybe_chdir
+    @book_ids = {}
     if source_text
-      WordTree::Text.clean(source_text)
-      WordTree::Text.add_ngrams_with_suffix(source_text, @hash, @n)
+      @trie.add_text!(source_text, @n)
+      # Restrict keys of subsequent books if we have a source_text
+      @restrict_keys = true
+    else
+      @restrict_keys = false
     end
   end
 
-  def load_text(path)
-    IO.read(path)
+  def chdir_load(path)
+    if @maybe_chdir.nil?
+      return File.open(path, "r:UTF-8", &:read)
+    else
+      FileUtils.cd(@maybe_chdir) do
+        return File.open(path, "r:UTF-8", &:read)
+      end
+    end
+  end
+
+  def packed_symbolic_string(str)
+    [str.to_sym.object_id].pack('N')
   end
 
   def count_ngrams(book_id, path, ref_id)
     puts "#{ref_id}: Processing #{book_id}..."
-    text = load_text(path)
+    text = chdir_load(path)
     puts "#{ref_id}: loaded from disk (#{text.size}b)"
     begin
-      suffix = @add_refs ? book_id.to_sym : nil
-      WordTree::Text.clean(text)
-      WordTree::Text.add_ngrams_with_suffix(text, @hash, @n, suffix, @restrict_keys)
+      id = packed_symbolic_string(book_id)
+      @book_ids[book_id.to_sym.object_id] ||= book_id
+      args = [text, @n, @add_refs ? '-' + id : '']
+      @trie.send(@restrict_keys ? :"union_text!" : :"add_text!", *args)
     rescue StandardError => e
-      puts "#{ref_id}: **ERROR** while adding text: #{text[0..100]}... #{e}"
+      puts "#{ref_id}: **ERROR** while adding text: #{text ? text[0..100] : "nil"}... #{e}"
+      raise e
     end
     Time.now.tap do |now|
-      puts "#{ref_id}: added (#{now - $start} seconds since start - #{(now - $start).to_f / ref_id} avg), new size: #{@hash.size}"
+      puts "#{ref_id}: added (#{now - $start} seconds since start - #{(now - $start).to_f / ref_id} avg), new size: #{@trie.size}"
     end
   end
 end
 
 
 options = {
-  :library => "library",
   :refs => false,
   :output => "baseline.txt",
   :n => 4
@@ -56,8 +71,8 @@ OptionParser.new do |opts|
     options[:verbose] = v
   end
 
-  opts.on("-l", "--library LIBRARY", "Set library path to LIBRARY. Use '-' to take file paths from STDIN.") do |path|
-    options[:library] = path
+  opts.on("-f", "--files FILELIST", "Read files from FILELIST. Use '-' to take file paths from STDIN.") do |path|
+    options[:files] = path
   end
 
   opts.on("-o", "--output BASELINE", "Set baseline file path to BASELINE") do |path|
@@ -68,16 +83,12 @@ OptionParser.new do |opts|
     options[:restrict] = path
   end
 
-  opts.on("-f", "--format FORMAT", "Output format: 'txt' or 'json'") do |format|
+  opts.on("", "--format FORMAT", "Output format: 'txt' or 'json'") do |format|
     options[:format] = format
   end
 
   opts.on("-n", "--ngrams N", "Generate x-grams from 1 to N") do |n|
     options[:n] = Integer(n)
-  end
-
-  opts.on("", "--restrict-id BOOK_ID", "Restrict baseline to ngrams found in BOOK_ID from library") do |book_id|
-    options[:restrict_book_id] = book_id
   end
 
   opts.on("", "--[no-]refs", "Include references to books (uses a lot of memory)") do |bool|
@@ -93,15 +104,21 @@ if options[:output]
   options[:format] ||= File.extname(options[:output]).sub(/^\.+/, '')
 end
 
-if options[:library] == "-"
-  # use stdin
-else
-  if !File.directory?(options[:library]) 
-    puts "library not found: #{options[:library]}"
-    exit -1
+get_book_paths = -> do
+  if options[:files] == "-"
+    $stderr.puts "Waiting for book list from STDIN..."
+    files_file = $stdin
+  else
+    files_file = File.open(options[:files], "r")
   end
-  $lib = WordTree::Disk::Librarian.new(options[:library])
+  files_file.each_line.map do |line|
+    $stderr.print line
+    line.strip
+  end
 end
+
+book_paths = get_book_paths.call
+book_count = book_paths.size
 
 $start = Time.now
 
@@ -113,15 +130,9 @@ if options[:restrict]
   rescue Errno::ENOENT
     nil
   end
-elsif options[:restrict_book_id]
-  if $lib.nil?
-    puts "library not set"
-    exit -1
-  end
-  case_study = $lib.find_without_ngrams(options[:restrict_book_id])
 end
 
-worker = TextWorker.new(case_study ? case_study.content : nil, options[:refs], options[:n])
+worker = TextWorker.new(options[:chdir], case_study ? case_study.content : nil, options[:refs], options[:n])
 
 content_q = Queue.new
 
@@ -129,23 +140,12 @@ ref_id = 0
 
 start = Time.now
 
-if options[:chdir]
-  puts "Using #{options[:chdir]} as working dir"
-  FileUtils.chdir(options[:chdir])
-end
-
 io_thread = Thread.new do
-  if options[:library] == "-"
-    $stdin.each_line do |path|
-      ref_id += 1
-      id = WordTree::Disk::LibraryLocator.id_from_path(path)
-      content_q.push([id, path.strip, ref_id])
-    end
-  else
-    $lib.library.each_with_id do |path, id|
-      ref_id += 1
-      content_q.push([id, path, ref_id])
-    end
+  puts "Reading #{book_paths.size} books..."
+  for path in book_paths
+    id = WordTree::Disk::LibraryLocator.id_from_path(path)
+    content_q.push([id, path.strip, ref_id+1])
+    ref_id += 1
   end
 end
 
@@ -155,7 +155,8 @@ work_thread = Thread.new do
     while args = content_q.pop(true)
       worker.count_ngrams(*args)    
     end
-  rescue ThreadError
+  rescue ThreadError => e
+    $stderr.puts e
   end
 end
 
@@ -178,12 +179,22 @@ when "json" then
       "processing_time_avg_per_book" => (finish - start).to_f / ref_id
     }
   }
+  index = {
+    "_index" => worker.book_ids
+  }
 
   File.open(options[:output], "w") do |file|
     file.puts "{"
     file.write JSON.pretty_generate(meta).split("\n").to_a[1..-2].join("\n") + ",\n"
+    file.write JSON.pretty_generate(index).split("\n").to_a[1..-2].join("\n") + ",\n"
     worker.trie.each do |k, v|
-      file.puts "  \"#{k}\": #{v},"
+      if options[:refs]
+        ngram, id = k.force_encoding("binary").split('-')
+        id = id.unpack('N').first
+        file.puts("  \"#{ngram}\":[#{v},#{id}],")
+      else
+        file.puts "  \"#{k}\": #{v},"
+      end
     end
     file.puts "}"
   end
@@ -196,14 +207,21 @@ when "txt" then
     file.puts "_processing_time_in_seconds #{finish - start}"
     file.puts "_processing_time_avg_per_book #{(finish - start).to_f / ref_id}"
 
-    worker.hash.each do |k, v|
-      if v.is_a? Hash
-        v.each do |kk, vv|
-          file.puts "#{vv} #{k} #{kk} #{kk.object_id}"
-        end
+    worker.book_ids.each do |k, v|
+      file.puts "_ #{k} #{v}"
+    end
+
+    count = 0
+    worker.trie.each do |k, v|
+      puts count if count % 1000 == 0
+      if options[:refs]
+        ngram, id = k.force_encoding("binary").split('-')
+        id = id.unpack('N').first
+        file.puts("#{v} #{id} #{ngram}")
       else
         file.puts "#{v} #{k}"
       end
+      count += 1
     end
   end
 end
