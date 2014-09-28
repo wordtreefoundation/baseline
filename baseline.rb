@@ -29,7 +29,7 @@ class TextWorker
     text = load_text(path)
     puts "#{ref_id}: loaded from disk (#{text.size}b)"
     begin
-      suffix = @add_refs ? book_id : nil
+      suffix = @add_refs ? book_id.to_sym : nil
       WordTree::Text.clean(text)
       WordTree::Text.add_ngrams_with_suffix(text, @hash, @n, suffix, @restrict_keys)
     rescue StandardError => e
@@ -142,7 +142,7 @@ io_thread = Thread.new do
       content_q.push([id, path.strip, ref_id])
     end
   else
-    $lib.library.each do |path, id|
+    $lib.library.each_with_id do |path, id|
       ref_id += 1
       content_q.push([id, path, ref_id])
     end
