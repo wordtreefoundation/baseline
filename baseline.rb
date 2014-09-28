@@ -1,4 +1,3 @@
-require 'wordtriez'
 require 'wordtree'
 require 'optparse'
 require 'thread'
@@ -7,15 +6,18 @@ require 'json'
 require 'fileutils'
 
 class TextWorker
-  attr_reader :trie
+  attr_reader :hash
 
   def initialize(source_text=nil, add_refs=false, n=4)
-    @trie = Wordtriez.new
-    @trie.add_text!(source_text.downcase, n) if source_text
+    @hash = {}
     # Restrict keys of subsequent books if we have a source_text
     @restrict_keys = !source_text.nil?
     @add_refs = add_refs
     @n = n
+    if source_text
+      WordTree::Text.clean(source_text)
+      WordTree::Text.add_ngrams_with_suffix(source_text, @hash, @n)
+    end
   end
 
   def load_text(path)
@@ -27,16 +29,14 @@ class TextWorker
     text = load_text(path)
     puts "#{ref_id}: loaded from disk (#{text.size}b)"
     begin
-      if @restrict_keys
-        @trie.union_text!(text, @n, @add_refs ? '-' + id : '')
-      else
-        @trie.add_text!(text, @n, @add_refs ? '-' + id : '')
-      end
+      suffix = @add_refs ? book_id : nil
+      WordTree::Text.clean(text)
+      WordTree::Text.add_ngrams_with_suffix(text, @hash, @n, suffix, @restrict_keys)
     rescue StandardError => e
       puts "#{ref_id}: **ERROR** while adding text: #{text[0..100]}... #{e}"
     end
     Time.now.tap do |now|
-      puts "#{ref_id}: added (#{now - $start} seconds since start - #{(now - $start).to_f / ref_id} avg), new size: #{@trie.size}"
+      puts "#{ref_id}: added (#{now - $start} seconds since start - #{(now - $start).to_f / ref_id} avg), new size: #{@hash.size}"
     end
   end
 end
@@ -196,11 +196,17 @@ when "txt" then
     file.puts "_processing_time_in_seconds #{finish - start}"
     file.puts "_processing_time_avg_per_book #{(finish - start).to_f / ref_id}"
 
-    worker.trie.each do |k, v|
-      file.puts "#{k} #{v}"
+    worker.hash.each do |k, v|
+      if v.is_a? Hash
+        v.each do |kk, vv|
+          file.puts "#{vv} #{k} #{kk} #{kk.object_id}"
+        end
+      else
+        file.puts "#{v} #{k}"
+      end
     end
   end
 end
 
-$t = worker.trie
-IRB.start
+# $t = worker.trie
+# IRB.start
