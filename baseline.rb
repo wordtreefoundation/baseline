@@ -4,6 +4,7 @@ require 'optparse'
 require 'thread'
 require 'irb'
 require 'json'
+require 'melisa'
 require 'fileutils'
 
 class TextWorker
@@ -167,22 +168,39 @@ finish = Time.now
 
 puts "Done."
 
-case options[:format].downcase
-when "json" then
-  meta =   {
-    "_meta" => {
-      "description" => "Baseline word frequencies for unigrams to 4-grams of words" + (case_study ? " for book #{case_study.id} (#{case_study.year})" : ""),
-      "book_count" => ref_id,
-      "book_range_start_year" => 1750,
-      "book_range_end_year" => 1860,
-      "processing_time_in_seconds" => finish - start,
-      "processing_time_avg_per_book" => (finish - start).to_f / ref_id
-    }
-  }
-  index = {
-    "_index" => worker.book_ids
-  }
 
+meta =   {
+  "_meta" => {
+    "description" => "Baseline word frequencies for unigrams to 4-grams of words" + (case_study ? " for book #{case_study.id} (#{case_study.year})" : ""),
+    "book_count" => ref_id,
+    "book_range_start_year" => 1750,
+    "book_range_end_year" => 1860,
+    "processing_time_in_seconds" => finish - start,
+    "processing_time_avg_per_book" => (finish - start).to_f / ref_id
+  }
+}
+index = {
+  "_index" => worker.book_ids
+}
+
+case options[:format].downcase
+when "dic" then
+  if options[:refs]
+    raise "TODO: save refs to Marisa dictionary file"
+  else
+    mt = Melisa::IntTrie.new
+    puts "Converting HAT-trie to Marisa-Trie..."
+    worker.trie.each do |k, v|
+      mt[k] = v
+    end
+    puts "Saving Marisa-Trie..."
+    mt.save(options[:output])
+  end
+  puts "Saving metadata..."
+  File.open(options[:output] + ".json", "w") do |file|
+    file.write({"_meta" => meta, "_index" => index}.to_json)
+  end
+when "json" then
   File.open(options[:output], "w") do |file|
     file.puts "{"
     file.write JSON.pretty_generate(meta).split("\n").to_a[1..-2].join("\n") + ",\n"
