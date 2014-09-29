@@ -25,6 +25,10 @@ class TextWorker
     end
   end
 
+  def clear_trie
+    @trie = nil
+  end
+
   def chdir_load(path)
     if @maybe_chdir.nil?
       return File.open(path, "r:UTF-8", &:read)
@@ -190,9 +194,14 @@ when "dic" then
   else
     mt = Melisa::IntTrie.new
     puts "Converting HAT-trie to Marisa-Trie..."
+    count = 0
     worker.trie.each do |k, v|
       mt[k] = v
+      count += 1
+      puts "Converted #{count / 1_000_000}M keys" if count % 1_000_000 == 0
     end
+    worker.clear_trie
+
     puts "Saving Marisa-Trie..."
     mt.save(options[:output])
   end
